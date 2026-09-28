@@ -57,7 +57,8 @@
   <div class="wrap">
     <div class="eyebrow">L'analyse · gratuite · sans engagement</div>
     <h1>Est-ce que les IA parlent de vous ?</h1>
-    <p>Deux mesures, une seule démarche. <strong>Tout de suite à l'écran</strong> : sept contrôles techniques sur votre site, dont deux que personne ne fait — nous nous présentons comme le robot de ChatGPT pour voir si votre hébergeur le laisse entrer, et nous vérifions que vos informations ne sont pas enfermées dans du JavaScript. <strong>Puis par e-mail</strong> : ce que ChatGPT, Gemini et Perplexity répondent réellement à dix questions que vos clients posent, et qui est cité à votre place. Gratuit, sans carte bancaire.</p>
+    <p class="seulement-email">Deux mesures, une seule démarche. <strong>Tout de suite à l'écran</strong> : sept contrôles techniques sur votre site, dont deux que personne ne fait — nous nous présentons comme le robot de ChatGPT pour voir si votre hébergeur le laisse entrer, et nous vérifions que vos informations ne sont pas enfermées dans du JavaScript. <strong>Puis par e-mail</strong> : ce que ChatGPT, Gemini et Perplexity répondent réellement à dix questions que vos clients posent, et qui est cité à votre place. Gratuit, sans carte bancaire.</p>
+    <p class="seulement-direct"><strong>En dix secondes</strong> : sept contrôles techniques, et ce qu'une IA lit vraiment de votre site. <strong>Puis en une minute</strong> : dix questions de clients posées en direct à ChatGPT, Gemini et Perplexity, qui est cité à votre place, et l'état de votre fiche Google. Gratuit, sans carte bancaire.</p>
     <form class="flash-form" id="flash-form" novalidate>
       <div class="flash-champ">
         <span class="flash-globe" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 3.9 5.8 3.9 9s-1.3 6.2-3.9 9c-2.6-2.8-3.9-5.8-3.9-9S9.4 5.8 12 3z"/></svg></span>
@@ -115,6 +116,26 @@
         <ul id="flash-ok-liste"></ul>
       </details>
 
+      <!-- Ce qu'une IA lit du site : titre, description, début du texte, pages lues -->
+      <div class="flash-lecture" id="flash-lecture" hidden>
+        <div class="eyebrow">Ce qu'une IA lit de vous</div>
+        <h3>Votre site, vu par une machine</h3>
+        <p class="fl-intro">Dans la plupart de ses réponses, ChatGPT ne lit d'un site que le titre et un extrait d'environ 200 caractères. Voici ce qu'il trouve chez vous.</p>
+        <div class="fl-grille">
+          <div class="fl-carte">
+            <div class="fl-url"><span class="fl-rond" aria-hidden="true"></span><span id="fl-url"></span></div>
+            <div class="fl-titre" id="fl-titre"></div>
+            <p class="fl-desc" id="fl-desc"></p>
+            <div class="fl-debut">
+              <span class="fl-lab">Les 200 premiers caractères du texte</span>
+              <p id="fl-debut"></p>
+            </div>
+          </div>
+          <ul class="fl-constats" id="fl-constats"></ul>
+        </div>
+        <p class="fl-pages"><span>Pages lues :</span> <span id="fl-pages"></span></p>
+      </div>
+
       <div class="flash-limite">
         <h3>Ce que cette première mesure ne dit pas</h3>
         <p>Elle ne porte que sur <strong>votre site</strong> : est-il lisible par une machine, oui ou non. Elle ne dit rien de ce que les moteurs <em>répondent réellement</em> quand un client cherche un professionnel comme vous — et c'est là que tout se joue. Près de la moitié des citations d'entreprises locales ne viennent d'ailleurs pas des sites, mais des fiches Google.</p>
@@ -125,12 +146,16 @@
       <div class="flash-suite" id="flash-suite">
         <div class="eyebrow">Seconde moitié · comprise</div>
         <h3>Ce que les moteurs répondent vraiment</h3>
-        <p>Nous posons dix questions que vos clients posent réellement — pas des mots-clés — à ChatGPT, Gemini et Perplexity, et nous relevons qui est cité. Vous recevez le relevé par e-mail, avec la comparaison à deux concurrents de votre choix.</p>
+        <p class="seulement-email">Nous posons dix questions que vos clients posent réellement — pas des mots-clés — à ChatGPT, Gemini et Perplexity, et nous relevons qui est cité. Vous recevez le relevé par e-mail, avec la comparaison à deux concurrents de votre choix.</p>
+        <p class="seulement-direct">Dix questions de clients — pas des mots-clés — posées en direct à ChatGPT, Gemini et Perplexity. Vous voyez les réponses arriver, qui est cité, à quelle place, et ce que dit votre fiche Google. Vérifiez votre métier et votre secteur : ce sont eux qui font les questions.</p>
 
         <form id="releve-form" name="releve-ia" method="POST" data-netlify="true" netlify-honeypot="bot-field">
           <input type="hidden" name="form-name" value="releve-ia">
           <input type="hidden" name="site" id="releve-site">
           <input type="hidden" name="score_technique" id="releve-score">
+          <input type="hidden" name="mode" id="releve-mode" value="email">
+          <input type="hidden" name="resultat" id="releve-resultat">
+          <input type="hidden" name="fiche" id="releve-fiche">
           <p hidden><label>Ne remplissez pas ce champ <input name="bot-field" tabindex="-1" autocomplete="off"></label></p>
 
           <div class="form-2">
@@ -155,10 +180,75 @@
               <span class="hint">Les vôtres, pas les nôtres — c'est ce qui rend la comparaison utile.</span>
             </div>
           </div>
+          <div class="form-2 seulement-direct">
+            <div class="field">
+              <label for="releve-nom">Nom de votre établissement</label>
+              <input id="releve-nom" name="nom" type="text" maxlength="80" autocomplete="organization">
+              <span class="hint">Tel que vos clients le connaissent : c'est ce nom que nous cherchons dans les réponses.</span>
+            </div>
+            <div class="field">
+              <label for="releve-maps">Lien de votre fiche Google Maps <span class="muted">(facultatif)</span></label>
+              <input id="releve-maps" name="maps" type="url" inputmode="url" placeholder="https://maps.app.goo.gl/…">
+              <span class="hint">Sur Google Maps : Partager › Copier le lien. Sans lien, nous cherchons la fiche à votre nom.</span>
+            </div>
+          </div>
 
-          <button type="submit" class="btn btn-primary btn-lg" id="releve-go">Recevoir le relevé</button>
-          <p class="flash-suite-note">Nous posons les dix questions nous-mêmes, moteur par moteur, et nous vérifions chaque réponse : le relevé vous arrive par e-mail sous 3 jours ouvrés. Nous n'envoyons rien d'autre que votre relevé.</p>
+          <button type="submit" class="btn btn-primary btn-lg" id="releve-go"><span class="seulement-email">Recevoir le relevé</span><span class="seulement-direct">Lancer le relevé</span></button>
+          <p class="flash-suite-note seulement-email">Nous posons les dix questions nous-mêmes, moteur par moteur, et nous vérifions chaque réponse : le relevé vous arrive par e-mail sous 3 jours ouvrés. Nous n'envoyons rien d'autre que votre relevé.</p>
+          <p class="flash-suite-note seulement-direct">Trente réponses, dix par moteur : comptez une à deux minutes, sans quitter la page. Votre e-mail sert à vous renvoyer ce relevé, et à rien d'autre.</p>
+          <div class="alert alert-err" id="releve-erreur" hidden></div>
         </form>
+
+        <!-- Relevé en direct : la grille se remplit question par question -->
+        <div class="rd" id="rd" hidden>
+          <div class="rd-tete">
+            <div>
+              <h3 id="rd-titre">Nous posons vos dix questions…</h3>
+              <p id="rd-sous" class="muted"></p>
+            </div>
+            <div class="rd-compteur" aria-live="polite"><b id="rd-fait">0</b><span>/ <span id="rd-total">30</span> réponses</span></div>
+          </div>
+          <div class="rd-barre" aria-hidden="true"><span id="rd-barre"></span></div>
+          <div class="rd-grille" id="rd-grille" role="table" aria-label="Réponses des moteurs, question par question"></div>
+          <p class="rd-aide muted">Touchez une case pour lire la réponse complète.</p>
+          <div class="rd-detail" id="rd-detail" hidden></div>
+
+          <div id="rd-fin" hidden>
+            <div class="flash-verdict rd-verdict" id="rd-verdict">
+              <div class="flash-jauge" id="rd-jauge" style="--v:0">
+                <svg viewBox="0 0 66 66" aria-hidden="true"><circle class="rg-bg" cx="33" cy="33" r="28"/><circle class="rg-fg" cx="33" cy="33" r="28"/></svg>
+                <div class="flash-jauge-t">
+                  <div class="flash-jauge-n"><b id="rd-score">—</b><span>/ 100</span></div>
+                  <div class="flash-jauge-l">Score Blason</div>
+                </div>
+              </div>
+              <div class="flash-verdict-txt">
+                <h2 id="rd-verdict-t">—</h2>
+                <p id="rd-verdict-r"></p>
+                <ul class="rd-detail-score" id="rd-detail-score"></ul>
+              </div>
+            </div>
+            <div class="rd-moteurs" id="rd-moteurs"></div>
+            <div class="rd-bloc">
+              <h4>Qui est cité à votre place</h4>
+              <p class="muted rd-bloc-sous">Toutes questions et tous moteurs confondus : nombre de réponses où chaque nom apparaît.</p>
+              <ol class="rd-noms" id="rd-noms"></ol>
+            </div>
+            <div class="rd-bloc">
+              <h4>Où les IA ont cherché</h4>
+              <p class="muted rd-bloc-sous">Les sites que les moteurs ont cités comme sources. Y figurer, c'est donner une chance d'être repris.</p>
+              <ul class="rd-sources" id="rd-sources"></ul>
+            </div>
+          </div>
+
+          <div class="rd-bloc rd-fiche" id="rd-fiche" hidden></div>
+
+          <div class="rd-methode" id="rd-methode" hidden>
+            <h4>Comment lire ce relevé</h4>
+            <p>Les réponses viennent des API officielles de ChatGPT, Gemini et Perplexity, recherche web activée, depuis la France. Elles peuvent différer de ce que vous voyez dans les applications, qui tiennent compte de votre compte, de votre historique et de votre position. C'est une seule mesure : d'un jour à l'autre, les noms changent. Google AI (AI Overviews, AI Mode) n'a pas d'API publique : nous le relevons à la main dans l'offre payante.</p>
+            <p class="rd-actions"><button type="button" class="btn btn-ghost" id="rd-imprimer">Enregistrer en PDF</button> <a class="btn btn-primary" href="contact.html">En parler quinze minutes</a></p>
+          </div>
+        </div>
 
         <div class="flash-envoye" id="flash-envoye" hidden>
           <h3>C'est noté.</h3>
