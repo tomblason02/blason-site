@@ -136,6 +136,14 @@
         <p class="fl-pages"><span>Pages lues :</span> <span id="fl-pages"></span></p>
       </div>
 
+      <!-- Fiche technique complète : tout ce qu'on peut lire du site sans y toucher -->
+      <div class="flash-fiche" id="flash-fiche" hidden>
+        <div class="eyebrow">Fiche technique complète</div>
+        <h3>Tout ce que nous avons lu sur votre site</h3>
+        <p class="ft-intro">Balises, mots-clés, structure, données structurées, robots des IA un par un, fichiers pour les robots. Des constats : aucun de ces points ne garantit à lui seul une citation.</p>
+        <div class="ft-grille" id="ft-grille"></div>
+      </div>
+
       <div class="flash-limite">
         <h3>Ce que cette première mesure ne dit pas</h3>
         <p>Elle ne porte que sur <strong>votre site</strong> : est-il lisible par une machine, oui ou non. Elle ne dit rien de ce que les moteurs <em>répondent réellement</em> quand un client cherche un professionnel comme vous — et c'est là que tout se joue. Près de la moitié des citations d'entreprises locales ne viennent d'ailleurs pas des sites, mais des fiches Google.</p>
@@ -230,6 +238,11 @@
             </div>
             <div class="rd-moteurs" id="rd-moteurs"></div>
             <div class="rd-bloc">
+              <h4>Le classement, moteur par moteur</h4>
+              <p class="muted rd-bloc-sous">Pour chaque IA : combien de ses réponses citent chaque établissement, et à quelle place en moyenne.</p>
+              <div class="rd-classements" id="rd-classements"></div>
+            </div>
+            <div class="rd-bloc">
               <h4>Qui est cité à votre place</h4>
               <p class="muted rd-bloc-sous">Toutes questions et tous moteurs confondus : nombre de réponses où chaque nom apparaît.</p>
               <ol class="rd-noms" id="rd-noms"></ol>
@@ -242,6 +255,12 @@
           </div>
 
           <div class="rd-bloc rd-fiche" id="rd-fiche" hidden></div>
+          <div class="rd-bloc rd-comparatif" id="rd-comparatif" hidden>
+            <h4>Vous face aux trois plus cités, sur Google</h4>
+            <p class="muted rd-bloc-sous">Leur fiche Google à côté de la vôtre : c'est souvent là que se joue la différence.</p>
+            <div class="rd-table-defile"><table class="rd-table" id="rd-comparatif-table"></table></div>
+            <p class="rf-attrib">Données Google Maps</p>
+          </div>
 
           <div class="rd-methode" id="rd-methode" hidden>
             <h4>Comment lire ce relevé</h4>

@@ -490,6 +490,7 @@
     $('flash-ok-bloc').hidden = ok.length === 0;
 
     afficherLecture(d);
+    afficherFicheTechnique(d);
 
     // Reporte le contexte dans le formulaire de la seconde moitié, pour ne pas
     // redemander au visiteur ce qu'il vient de saisir.
@@ -609,10 +610,10 @@
     etat.releve = null;
     var rd = $('rd');
     if (rd) rd.hidden = true;
-    ['rd-grille', 'rd-detail', 'rd-moteurs', 'rd-noms', 'rd-sources', 'rd-fiche', 'rd-detail-score'].forEach(function (id) {
+    ['rd-grille', 'rd-detail', 'rd-moteurs', 'rd-noms', 'rd-sources', 'rd-fiche', 'rd-detail-score', 'rd-classements', 'rd-comparatif-table'].forEach(function (id) {
       if ($(id)) $(id).textContent = '';
     });
-    ['rd-detail', 'rd-fin', 'rd-fiche', 'rd-methode'].forEach(function (id) { if ($(id)) $(id).hidden = true; });
+    ['rd-detail', 'rd-fin', 'rd-fiche', 'rd-methode', 'rd-comparatif'].forEach(function (id) { if ($(id)) $(id).hidden = true; });
     if (releve) releve.hidden = false;
     if (envoye) envoye.hidden = true;
     if (etape2) etape2.classList.remove('is-on');
@@ -901,7 +902,7 @@
     var nomVous = R.corps.nom, domaine = etat.scan.domaine;
     var parMoteur = {}, conc = [], sources = {}, nOk = 0, pts = 0, vousN = 0, erreurs = 0;
     R.moteurs.forEach(function (m) {
-      var pm = parMoteur[m] = { ok: 0, cite: 0, meilleur: null, noms: {} };
+      var pm = parMoteur[m] = { ok: 0, cite: 0, meilleur: null, noms: {}, pos: {}, posVous: [], mentions: 0, mentionsVous: 0 };
       R.res[m].forEach(function (j) {
         if (!j || !j.ok) { erreurs++; return; }
         nOk++; pm.ok++;
@@ -909,7 +910,10 @@
           vousN++; pm.cite++;
           pts += j.vous.rang ? (j.vous.rang <= 3 ? 1 : 0.5) : 0.75;
           if (j.vous.rang && (!pm.meilleur || j.vous.rang < pm.meilleur)) pm.meilleur = j.vous.rang;
+          if (j.vous.rang) pm.posVous.push(j.vous.rang);
+          pm.mentionsVous++;
         }
+        pm.mentions += (j.noms || []).length + (j.vous && j.vous.cite && !j.vous.rang ? 1 : 0);
         var vus = {};
         (j.noms || []).forEach(function (n, k) {
           if (memeNom(n, nomVous)) return;
@@ -922,6 +926,7 @@
           c.par[m] = (c.par[m] || 0) + 1;
           c.meilleur = Math.min(c.meilleur, k + 1);
           pm.noms[c.nom] = (pm.noms[c.nom] || 0) + 1;
+          (pm.pos[c.nom] = pm.pos[c.nom] || []).push(k + 1);
         });
         var vusS = {};
         (j.sources || []).forEach(function (s) {
@@ -942,8 +947,14 @@
     sc.total = sc.citations + sc.lisibilite + sc.concurrents;
     var srcs = Object.keys(sources).map(function (k) { return { d: k, n: sources[k] }; })
       .sort(function (a, b) { return b.n - a.n; });
+    var mentions = 0, mentionsVous = 0;
+    R.moteurs.forEach(function (m) {
+      var pm = parMoteur[m];
+      pm.voix = pm.mentions ? pm.mentionsVous / pm.mentions : 0;
+      mentions += pm.mentions; mentionsVous += pm.mentionsVous;
+    });
     return { parMoteur: parMoteur, conc: conc, sources: srcs, nOk: nOk, vousN: vousN, erreurs: erreurs,
-             score: sc, domaine: domaine };
+             score: sc, domaine: domaine, voix: mentions ? mentionsVous / mentions : 0 };
   }
 
   function terminer(R) {
@@ -1006,9 +1017,10 @@
       var carte = el('div', 'rd-moteur' + (pm.cite ? ' cite' : ''));
       carte.appendChild(el('div', 'rd-moteur-n', NOMS_MOTEURS[m]));
       carte.appendChild(el('div', 'rd-moteur-v', pm.cite + ' / ' + pm.ok));
-      carte.appendChild(el('div', 'rd-moteur-l', pm.cite
+      carte.appendChild(el('div', 'rd-moteur-l', fr(pm.cite
         ? 'réponses vous citent' + (pm.meilleur ? ' · meilleure place : ' + rang(pm.meilleur) : '')
-        : 'réponses vous citent · jamais cité'));
+        : 'réponses vous citent · jamais cité')));
+      carte.appendChild(el('div', 'rd-moteur-l', fr('part de voix : ' + pct(pm.voix))));
       var noms = Object.keys(pm.noms).sort(function (a, b) { return pm.noms[b] - pm.noms[a]; }).slice(0, 3);
       if (noms.length) {
         var p = el('p', 'rd-moteur-top');
@@ -1070,6 +1082,9 @@
       us.appendChild(li);
     });
     if (!S.sources.length) us.appendChild(el('li', 'vide', 'Les moteurs n’ont pas indiqué leurs sources.'));
+
+    rendreClassements(R, S);
+    if (R.ficheAttendue) chargerComparatif(R, S.conc.slice(0, 3).map(function (c) { return c.nom; }));
 
     fin.hidden = false;
     $('rd-methode').hidden = false;
@@ -1138,6 +1153,7 @@
         if (R.gen !== etat.gen) return;
         R.fiche = j;
         afficherFiche(R, j);
+        rendreComparatif(R);
         if (R.envoye === 'attente') envoyerResultat(R, R.modeFinal);
       });
   }
@@ -1174,6 +1190,15 @@
     if (f.telephone) infos.appendChild(el('li', null, f.telephone));
     if (f.site) infos.appendChild(el('li', null, hote(f.site)));
     carte.appendChild(infos);
+    if (f.niveau_prix) carte.appendChild(el('p', 'rf-prix', fr('Gamme de prix : ' + f.niveau_prix)));
+    var pratiques = (f.attributs || []).map(function (a) { return { t: (a.oui ? '✓ ' : '✗ ') + a.lib, cls: a.oui ? 'ok' : 'ko' }; })
+      .concat((f.options || []).map(function (o) { return { t: '✓ ' + o, cls: 'ok' }; }));
+    if (pratiques.length) carte.appendChild(puces(pratiques));
+    if (lienSur(f.lien_avis)) {
+      var la = el('a', 'rf-lien-avis', 'Le lien pour laisser un avis');
+      la.href = f.lien_avis; la.target = '_blank'; la.rel = 'noopener';
+      carte.appendChild(la);
+    }
     if ((f.horaires || []).length) {
       var det = el('details', 'rf-horaires');
       det.appendChild(el('summary', null, 'Horaires'));
@@ -1238,6 +1263,11 @@
     }).join(' · ') + (S.erreurs ? ' · ' + S.erreurs + ' sans réponse' : ''));
     l.push('Cités : ' + S.conc.slice(0, 6).map(function (c) { return c.nom + ' (' + c.total + ')'; }).join(', '));
     l.push('Sources : ' + S.sources.slice(0, 6).map(function (s) { return s.d + ' (' + s.n + ')'; }).join(', '));
+    l.push('Part de voix ' + pct(S.voix) + ' · ' + R.moteurs.map(function (m) {
+      var pm = S.parMoteur[m];
+      var top = Object.keys(pm.noms).sort(function (a, b) { return pm.noms[b] - pm.noms[a]; }).slice(0, 3);
+      return NOMS_MOTEURS[m] + ' : ' + (top.join(', ') || 'aucun nom');
+    }).join(' · '));
     l.push('Questions sur : « ' + R.corps.metier + ' » à « ' + R.corps.lieu + ' », nom « ' + R.corps.nom + ' »');
     return l.join('\n').slice(0, 1800);
   }
@@ -1275,6 +1305,231 @@
 
   var imprimer = $('rd-imprimer');
   if (imprimer) imprimer.addEventListener('click', function () { window.print(); });
+
+
+  /* ============================================================
+     V26 · Fiche technique complète, classement par IA, comparaison Google
+     ============================================================ */
+
+  // Espaces insécables de la typographie française, comme sur le reste du site.
+  function fr(s) {
+    return String(s == null ? '' : s)
+      .replace(/ ([:;!?»])/g, function (m, c) { return (c === ':' || c === '»' ? ' ' : ' ') + c; })
+      .replace(/« /g, '« ');
+  }
+  function pct(x) { return Math.round((x || 0) * 100) + ' %'; }
+  function virgule(x) { return (Math.round(x * 10) / 10).toString().replace('.', ','); }
+  function moyenne(l) { return l && l.length ? l.reduce(function (a, b) { return a + b; }, 0) / l.length : null; }
+
+  function puces(liste, cls) {
+    var d = el('div', 'ft-puces');
+    liste.forEach(function (x) {
+      var u = lienSur(x.url);
+      var p = el(u ? 'a' : 'span', 'ft-puce ' + (x.cls || cls || ''), fr(x.t));
+      if (u) { p.href = u; p.target = '_blank'; p.rel = 'noopener nofollow'; }
+      d.appendChild(p);
+    });
+    return d;
+  }
+
+  function carteFT(titre, lignes, pied, extra) {
+    var c = el('div', 'ft-carte');
+    c.appendChild(el('h4', null, fr(titre)));
+    if (lignes && lignes.length) {
+      var ul = el('ul', 'ft-lignes');
+      lignes.forEach(function (l) {
+        if (!l) return;
+        var li = el('li', 'ft-l ' + (l.etat || 'neutre'));
+        var lib = el('span', 'ft-lib', fr(l.lib));
+        if (l.sous) lib.appendChild(el('small', null, fr(l.sous)));
+        li.appendChild(lib);
+        li.appendChild(el('span', 'ft-val', fr(l.val == null ? '' : l.val)));
+        ul.appendChild(li);
+      });
+      c.appendChild(ul);
+    }
+    if (extra) c.appendChild(extra);
+    if (pied) c.appendChild(el('p', 'ft-pied', fr(pied)));
+    return c;
+  }
+
+  function afficherFicheTechnique(d) {
+    var bloc = $('flash-fiche'), g = $('ft-grille');
+    if (!bloc || !g) return;
+    var A = d.analyse;
+    g.textContent = '';
+    if (!A) { bloc.hidden = true; return; }
+    var M = A.meta, S = A.structure, K = A.mots_cles, T = A.technique, F = A.fichiers;
+    var LONG = { ok: 'bonne longueur', court: 'trop court', long: 'un peu long', absent: 'absent' };
+    var hSite = String(d.domaine || '').replace(/:\d+$/, '').replace(/^www\./, '');
+    var hCanon = M.canonique ? hote(M.canonique) : '';
+    var ogs = [M.og_titre && 'titre', M.og_description && 'description', M.og_image && 'image'].filter(Boolean);
+
+    g.appendChild(carteFT('Balises lues par Google et les IA', [
+      { lib: 'Titre de la page', val: M.titre.longueur ? M.titre.longueur + ' caractères · ' + LONG[M.titre.verdict] : 'absent', etat: M.titre.verdict === 'ok' ? 'ok' : 'ko' },
+      { lib: 'Description', val: M.description.longueur ? M.description.longueur + ' caractères · ' + LONG[M.description.verdict] : 'absente', etat: M.description.verdict === 'ok' ? 'ok' : 'ko' },
+      { lib: 'Langue déclarée', val: M.langue || 'non déclarée', etat: M.langue ? 'ok' : 'ko' },
+      { lib: 'Adresse officielle de la page', sous: 'balise canonique', val: M.canonique ? (hCanon && hCanon !== hSite ? 'renvoie vers un autre domaine : ' + hCanon : 'déclarée') : 'non déclarée', etat: M.canonique ? (hCanon && hCanon !== hSite ? 'ko' : 'ok') : 'neutre' },
+      { lib: 'Consigne aux moteurs', val: M.noindex ? 'noindex : la page demande à ne pas être indexée' : 'indexation autorisée', etat: M.noindex ? 'ko' : 'ok' },
+      { lib: 'Aperçu quand on partage le lien', sous: 'Open Graph', val: ogs.length ? ogs.join(', ') + (ogs.length < 3 ? ' (incomplet)' : '') : 'aucun', etat: ogs.length === 3 ? 'ok' : 'ko' },
+      { lib: 'Affichage sur mobile', val: M.viewport ? 'prévu' : 'non prévu', etat: M.viewport ? 'ok' : 'ko' },
+      { lib: 'Icône du site', val: M.favicon ? 'présente' : 'absente', etat: M.favicon ? 'ok' : 'ko' }
+    ]));
+
+    var mc = el('div');
+    if (K.mots && K.mots.length) mc.appendChild(puces(K.mots.map(function (m) { return { t: m.mot + ' · ' + m.n }; })));
+    if (K.expressions && K.expressions.length) {
+      mc.appendChild(el('p', 'ft-sous-titre', 'Expressions qui reviennent'));
+      mc.appendChild(puces(K.expressions.map(function (m) { return { t: m.expr + ' · ' + m.n, cls: 'expr' }; })));
+    }
+    var piedMots = K.total + ' mots analysés, accueil et pages lues.';
+    if (K.metier_n != null && d.profil && d.profil.metier) piedMots = 'Votre métier (« ' + d.profil.metier + ' ») revient ' + K.metier_n + ' fois, '
+      + (K.ville_n != null && d.profil.ville ? 'votre ville ' + K.ville_n + ' fois, ' : '') + 'sur ' + K.total + ' mots analysés.';
+    g.appendChild(carteFT('Les mots qui reviennent le plus', null, piedMots, mc));
+
+    var h1 = (A.titres.h1 || []);
+    g.appendChild(carteFT('Structure de la page d’accueil', [
+      { lib: 'Titre principal (H1)', val: h1.length ? (h1.length > 1 ? h1.length + ' titres : ' : '') + h1.slice(0, 2).join(' · ') : 'aucun', etat: h1.length === 1 ? 'ok' : 'ko' },
+      { lib: 'Sous-titres (H2)', val: (A.titres.h2 || []).length ? A.titres.h2.length + ' : ' + A.titres.h2.slice(0, 4).join(' · ') + (A.titres.h2.length > 4 ? '…' : '') : 'aucun', etat: (A.titres.h2 || []).length ? 'ok' : 'ko' },
+      { lib: 'Intertitres (H3)', val: S.h3_n, etat: 'neutre' },
+      { lib: 'Images', val: S.images + (S.images ? ' · ' + (S.images_sans_alt ? S.images_sans_alt + ' sans description' : 'toutes décrites') : ''), etat: S.images_sans_alt ? 'ko' : 'ok' },
+      { lib: 'Liens', val: S.liens_internes + ' vers vos pages · ' + S.liens_externes + ' vers l’extérieur', etat: 'neutre' },
+      { lib: 'Téléphone cliquable', val: S.tel_cliquable ? 'oui' : 'non', etat: S.tel_cliquable ? 'ok' : 'ko' },
+      { lib: 'E-mail visible', val: (S.emails || [])[0] || 'aucun', etat: (S.emails || []).length ? 'ok' : 'neutre' },
+      { lib: 'Documents PDF liés', val: (S.pdf || []).length ? S.pdf.join(', ') + ' : leur contenu n’est pas dans la page' : 'aucun', etat: (S.pdf || []).length ? 'ko' : 'neutre' },
+      { lib: 'Carte Google intégrée', val: S.carte_google ? 'oui' : 'non', etat: 'neutre' },
+      { lib: 'Formulaire', val: S.formulaire ? 'oui' : 'non', etat: 'neutre' }
+    ]));
+
+    var jl = el('div', 'ft-jsonld');
+    if (!(A.json_ld || []).length) jl.appendChild(el('p', 'ft-vide', 'Aucune donnée structurée : rien ne dit à une machine, sans deviner, qui vous êtes.'));
+    (A.json_ld || []).forEach(function (o) {
+      var b = el('div', 'ft-objet');
+      b.appendChild(el('b', null, o.types.join(', ')));
+      if (o.local) {
+        b.appendChild(puces(o.presents.map(function (x) { return { t: '✓ ' + x, cls: 'ok' }; })
+          .concat(o.manquants.map(function (x) { return { t: '✗ ' + x, cls: 'ko' }; }))));
+      } else {
+        b.appendChild(el('span', 'muted', ' · ' + o.champs + ' champ' + (o.champs > 1 ? 's' : '')));
+      }
+      jl.appendChild(b);
+    });
+    g.appendChild(carteFT('Données structurées (schema.org)', null,
+      'Le format standard qui décrit votre établissement aux machines : nom, adresse, horaires…', jl));
+
+    g.appendChild(carteFT('Les robots des IA, un par un', (A.robots_ia || []).map(function (r) {
+      return { lib: r.nom, sous: r.role, val: r.bloque ? 'bloqué' : 'autorisé', etat: r.bloque ? 'ko' : 'ok' };
+    }), F.robots_txt.present ? 'Lu dans votre fichier robots.txt.' : 'Pas de fichier robots.txt : tout est autorisé par défaut.'));
+
+    var sm = F.sitemap || {}, ll = F.llms_txt || {};
+    g.appendChild(carteFT('Les fichiers pour les robots', [
+      { lib: 'robots.txt', sous: 'ce que les robots ont le droit de lire', val: F.robots_txt.present ? 'présent' : 'absent', etat: F.robots_txt.present ? 'ok' : 'neutre' },
+      { lib: 'sitemap.xml', sous: 'la liste de vos pages', val: sm.present ? 'présent · ' + sm.nb + (sm.index ? ' sous-listes' : ' adresses') : (sm.declares && sm.declares.length ? 'déclaré, non lu ici' : 'absent : Google et Bing découvrent vos pages moins vite'), etat: sm.present ? 'ok' : (sm.declares && sm.declares.length ? 'neutre' : 'ko') },
+      { lib: 'llms.txt', sous: 'résumé du site pour les IA', val: ll.present ? 'présent' + (ll.titre ? ' · « ' + ll.titre + ' »' : '') : 'absent', etat: 'neutre' }
+    ], 'Le llms.txt est une proposition de 2024. Aucun des grands moteurs n’a confirmé s’en servir pour choisir ses sources : c’est une information, pas un levier.'));
+
+    var an = new Date().getFullYear(), sec = T.temps_ms / 1000;
+    g.appendChild(carteFT('Technique', [
+      { lib: 'Temps de réponse de l’accueil', val: virgule(sec) + ' s', etat: sec < 1.5 ? 'ok' : (sec < 3 ? 'neutre' : 'ko') },
+      { lib: 'Poids de la page', val: T.poids, etat: 'neutre' },
+      { lib: 'Cadenas (HTTPS)', val: T.https ? 'oui' : 'non', etat: T.https ? 'ok' : 'ko' },
+      T.redirection_https === null ? null : { lib: 'Adresse en http renvoyée vers https', val: T.redirection_https ? 'oui' : 'non', etat: T.redirection_https ? 'ok' : 'ko' },
+      { lib: 'Compression', val: T.compression || 'aucune annoncée', etat: T.compression ? 'ok' : 'neutre' },
+      { lib: 'Outil du site', val: T.cms || 'non identifié', etat: 'neutre' },
+      T.serveur ? { lib: 'Serveur', val: T.serveur, etat: 'neutre' } : null,
+      { lib: 'Année en bas de page', val: T.annee_copyright ? '© ' + T.annee_copyright + (T.annee_copyright < an - 1 ? ' : le site paraît ne plus être tenu à jour' : '') : 'aucune', etat: T.annee_copyright ? (T.annee_copyright < an - 1 ? 'ko' : 'ok') : 'neutre' }
+    ]));
+
+    var rs = S.reseaux || [];
+    g.appendChild(carteFT('Vos autres présences, liées depuis le site', null,
+      rs.length ? 'Les IA recoupent ce qu’elles lisent ailleurs : ces liens les aident à relier vos profils.' : 'Aucun lien vers votre fiche Google, vos réseaux ou vos annuaires : rien n’aide les IA à relier vos profils.',
+      rs.length ? puces(rs.map(function (r) { return { t: r.reseau, url: r.url, cls: 'lien' }; })) : null));
+
+    bloc.hidden = false;
+  }
+
+  function rendreClassements(R, S) {
+    var cl = $('rd-classements');
+    if (!cl) return;
+    cl.textContent = '';
+    R.moteurs.forEach(function (m) {
+      var pm = S.parMoteur[m];
+      var col = el('div', 'rd-classe');
+      var tete = el('div', 'rd-classe-tete');
+      tete.appendChild(el('b', null, NOMS_MOTEURS[m]));
+      tete.appendChild(el('span', null, pm.ok + ' réponses'));
+      col.appendChild(tete);
+      var lignes = Object.keys(pm.noms).map(function (n) { return { nom: n, n: pm.noms[n], moy: moyenne(pm.pos[n]) }; })
+        .sort(function (a, b) { return b.n - a.n || a.moy - b.moy; }).slice(0, 8);
+      var vous = { nom: R.corps.nom, n: pm.cite, moy: moyenne(pm.posVous), vous: true };
+      var pos = 0;
+      while (pos < lignes.length && (lignes[pos].n > vous.n || (lignes[pos].n === vous.n && vous.moy != null && lignes[pos].moy < vous.moy))) pos++;
+      lignes.splice(vous.n ? pos : lignes.length, 0, vous);
+      var ol = el('ol', 'rd-classe-liste');
+      lignes.forEach(function (l) {
+        var li = el('li', l.vous ? (l.n ? 'est-vous' : 'est-vous absent') : '');
+        li.appendChild(el('b', null, l.vous ? l.nom + ' (vous)' : l.nom));
+        li.appendChild(el('span', null, fr(l.n ? l.n + '/' + pm.ok + (l.moy ? ' · place ' + virgule(l.moy) : '') : 'absent')));
+        ol.appendChild(li);
+      });
+      col.appendChild(ol);
+      col.appendChild(el('p', 'rd-classe-pied', fr('Votre part de voix : ' + pct(pm.voix) + ' des noms cités')));
+      cl.appendChild(col);
+    });
+  }
+
+  function chargerComparatif(R, noms) {
+    if (!noms.length) return;
+    fetch('/api/fiche', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jeton: R.jeton, concurrents: noms })
+    })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { concurrents: [] }; })
+      .then(function (j) {
+        if (R.gen !== etat.gen) return;
+        R.comparatif = (j && j.concurrents) || [];
+        rendreComparatif(R);
+      });
+  }
+
+  function rendreComparatif(R) {
+    var bloc = $('rd-comparatif'), t = $('rd-comparatif-table');
+    if (!bloc || !t || !R.comparatif || !R.comparatif.length) return;
+    t.textContent = '';
+    var tete = el('tr');
+    ['Établissement', 'Note', 'Avis', 'Photos', 'Site web', 'Catégorie'].forEach(function (h) { tete.appendChild(el('th', null, h)); });
+    var thead = el('thead'); thead.appendChild(tete); t.appendChild(thead);
+    var tb = el('tbody');
+    function ligne(nom, f, vous) {
+      var tr = el('tr', vous ? 'est-vous' : '');
+      tr.appendChild(el('td', 'rd-t-nom', nom + (vous ? ' (vous)' : '')));
+      if (!f) {
+        var td = el('td', 'muted', vous ? 'fiche non trouvée' : 'fiche introuvable');
+        td.colSpan = 5; tr.appendChild(td);
+      } else {
+        tr.appendChild(el('td', null, f.note != null ? String(f.note).replace('.', ',') + ' ★' : '—'));
+        tr.appendChild(el('td', null, String(f.nb_avis || 0)));
+        tr.appendChild(el('td', null, f.photos >= 10 ? '10 et +' : String(f.photos || 0)));
+        tr.appendChild(el('td', f.site ? '' : 'ko', f.site ? hote(f.site) : 'aucun'));
+        tr.appendChild(el('td', null, f.categorie || '—'));
+      }
+      tb.appendChild(tr);
+    }
+    var moi = R.fiche && R.fiche.trouvee ? R.fiche.fiche : null;
+    ligne(R.corps.nom, moi, true);
+    R.comparatif.forEach(function (c) { ligne(c.trouvee ? c.nom : c.cherche, c.trouvee ? c : null, false); });
+    t.appendChild(tb);
+    var trouves = R.comparatif.filter(function (c) { return c.trouvee; });
+    var vieux = bloc.querySelector('.rd-comp-verdict');
+    if (vieux) vieux.remove();
+    if (trouves.length && moi) {
+      var moyAvis = Math.round(trouves.reduce(function (a, c) { return a + (c.nb_avis || 0); }, 0) / trouves.length);
+      bloc.insertBefore(el('p', 'rd-comp-verdict', fr('Les plus cités ont en moyenne ' + moyAvis + ' avis sur Google, vous ' + (moi.nb_avis || 0) + '.')), bloc.querySelector('.rf-attrib'));
+    }
+    bloc.hidden = false;
+  }
 
   /* --- recommencer --- */
   if (encore) encore.addEventListener('click', function () {
