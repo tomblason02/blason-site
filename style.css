@@ -1465,3 +1465,6 @@ html[data-releve="direct"] .seulement-email { display: none !important; }
   .rd-ligne, .rd-noms li, .rf-un-avis { break-inside: avoid; }
 }
 #rd, #rd-fin, #rd-detail, #flash-lecture { scroll-margin-top: 110px; }
+
+/* V25 · Phrase d'entrée plus longue (« Vous n'apparaissez pas sur les IA ? ») : une mesure plus large pour tenir sur moins de lignes */
+.h3-copy h1.home-h1 { max-width: 19ch; }
